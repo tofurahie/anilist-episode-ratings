@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AniList Episode Ratings",
-  "version": "1.4",
-  "description": "Названия и оценки серий (IMDb, фолбэк TMDB) на страницах аниме AniList",
+  "version": "1.5",
+  "description": "Названия и оценки серий с IMDb на страницах аниме AniList",
   "background": { "service_worker": "bg.js" },
   "permissions": ["scripting"],
   "host_permissions": ["https://www.imdb.com/*"],

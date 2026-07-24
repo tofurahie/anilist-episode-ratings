@@ -1,7 +1,4 @@
-// AniList Episode Ratings: серии с оценками IMDb (фолбэк — TMDB) на anilist.co/anime/*
-const TMDB_KEY = '7ad6930931183f17fc6baa761a88b5d2';
-const TMDB = 'https://api.themoviedb.org/3';
-
+// AniList Episode Ratings: пооэпизодные оценки IMDb на anilist.co/anime/*
 const cache = {};         // anilistId -> данные для рендера
 const failed = new Set(); // anilistId, для которых данных нет — не долбим API
 let busy = false;
@@ -25,9 +22,8 @@ async function load(anilistId) {
   const media = await anilist(anilistId);
   if (!media || media.format === 'MOVIE') return null;
   const ids = await armIds(anilistId);
-  let d = null;
-  if (ids?.imdb) d = await loadImdb(ids.imdb, media).catch(e => (console.warn('[ep-ratings] imdb', e), null));
-  if (!d) d = await loadTmdb(ids, media).catch(e => (console.warn('[ep-ratings] tmdb', e), null));
+  if (!ids?.imdb) return null;
+  const d = await loadImdb(ids.imdb, media).catch(e => (console.warn('[ep-ratings] imdb', e), null));
   if (!d?.eps?.length) return null;
   return { anilistId, ...d };
 }
@@ -55,36 +51,6 @@ async function loadImdb(imdbId, media) {
   return { source: `IMDb S${pick.season}`, eps };
 }
 
-// --- TMDB (фолбэк, когда IMDb-маппинга нет или страница не распарсилась) ---
-async function loadTmdb(ids, media) {
-  const tmdbId = ids?.themoviedb || await searchTmdb(media);
-  if (!tmdbId) return null;
-  const show = await tmdb(`/tv/${tmdbId}`);
-  const seasons = (show.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
-  if (!seasons.length) return null;
-  const season = seasons.find(s => s.season_number === ids?.['themoviedb-season'])
-    || guessSeason(seasons, media);
-  const s = await tmdb(`/tv/${tmdbId}/season/${season.season_number}`);
-  const eps = sliceToEntry((s.episodes || []).map(e => ({
-    n: e.episode_number, name: e.name, score: e.vote_average,
-    ts: e.air_date ? Date.parse(e.air_date) : null,
-    url: `https://www.themoviedb.org/tv/${tmdbId}/season/${season.season_number}/episode/${e.episode_number}`
-  })), media);
-  return { source: `TMDB S${season.season_number}`, eps };
-}
-
-// ponytail: сезон = ближайший по дате старта
-function guessSeason(seasons, media) {
-  if (seasons.length === 1 || !media.startDate?.year) return seasons[0];
-  const start = startTs(media);
-  let best = seasons[0], bestD = Infinity;
-  for (const s of seasons) {
-    const d = s.air_date ? Math.abs(new Date(s.air_date) - start) : Infinity;
-    if (d < bestD) { best = s; bestD = d; }
-  }
-  return best;
-}
-
 // Сезоны со сквозной нумерацией (мердж) — режем по дате старта записи AniList и её числу серий
 function sliceToEntry(eps, media) {
   const start = startTs(media);
@@ -101,7 +67,7 @@ function startTs(media) {
 }
 
 async function anilist(id) {
-  const q = `query($id:Int){Media(id:$id){format episodes startDate{year month day} title{romaji english}}}`;
+  const q = `query($id:Int){Media(id:$id){format episodes startDate{year month day}}}`;
   const r = await fetch('https://graphql.anilist.co', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -115,22 +81,6 @@ async function armIds(anilistId) {
     const r = await fetch(`https://arm.haglund.dev/api/v2/ids?source=anilist&id=${anilistId}`);
     return r.ok ? await r.json() : null;
   } catch { return null; }
-}
-
-async function searchTmdb(media) {
-  for (const t of [media.title.english, media.title.romaji].filter(Boolean)) {
-    const clean = t.replace(/\s*[:\-]?\s*(season\s*\d+|\d+(st|nd|rd|th)\s+season|part\s*\d+|cour\s*\d+).*$/i, '').trim();
-    const j = await tmdb(`/search/tv?query=${encodeURIComponent(clean)}`);
-    if (j.results?.length) return j.results[0].id;
-  }
-  return null;
-}
-
-async function tmdb(path) {
-  const sep = path.includes('?') ? '&' : '?';
-  const r = await fetch(`${TMDB}${path}${sep}api_key=${TMDB_KEY}&language=en-US`);
-  if (!r.ok) throw new Error(`TMDB ${r.status} ${path}`);
-  return r.json();
 }
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -134,6 +134,7 @@ async function tmdb(path) {
 }
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtVotes = v => !v ? '' : v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(v);
 
 function render(d) {
   if (!location.pathname.startsWith(`/anime/${d.anilistId}`)) return;
@@ -141,17 +142,16 @@ function render(d) {
   const host = document.querySelector('.overview');
   if (!host) return; // страница ещё не отрисована — интервал попробует снова
 
-  const rows = d.eps.map(e => {
+  const tiles = d.eps.map(e => {
     const score = e.score ? e.score.toFixed(1) : '—';
     const col = !e.score ? 'rgb(var(--color-text-light))'
       : e.score >= 8 ? 'rgb(var(--color-green))'
       : e.score >= 6.5 ? 'rgb(var(--color-orange))'
       : 'rgb(var(--color-red))';
-    const votes = e.votes ? ` title="${e.votes} votes"` : '';
-    return `<a class="epr-row" href="${e.url}" target="_blank" rel="noreferrer"${votes}>
+    return `<a class="epr-tile" href="${e.url}" target="_blank" rel="noreferrer" data-name="${esc(e.name || '')}">
       <span class="epr-num">${e.n}</span>
-      <span class="epr-name">${esc(e.name || '')}</span>
       <span class="epr-score" style="color:${col}">${score}</span>
+      <span class="epr-votes">${fmtVotes(e.votes)}</span>
     </a>`;
   }).join('');
 
@@ -162,13 +162,33 @@ function render(d) {
     <style>
       #ep-ratings { margin-bottom: 30px; }
       #ep-ratings h2 { font-size: 1.4rem; font-weight: 500; color: rgb(var(--color-text-lighter)); margin-bottom: 10px; }
-      #ep-ratings .epr-list { background: rgb(var(--color-foreground)); border-radius: 4px; padding: 6px 0; max-height: 416px; overflow-y: auto; }
-      #ep-ratings .epr-row { display: grid; grid-template-columns: 34px 1fr 44px; gap: 10px; padding: 7px 16px; font-size: 1.3rem; color: rgb(var(--color-text)); text-decoration: none; }
-      #ep-ratings .epr-row:hover { background: rgb(var(--color-background)); }
-      #ep-ratings .epr-num { color: rgb(var(--color-text-light)); text-align: right; }
-      #ep-ratings .epr-score { text-align: right; font-weight: 600; }
+      #ep-ratings .epr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; }
+      #ep-ratings .epr-tile { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px 7px;
+        background: rgb(var(--color-foreground)); border-radius: 4px; text-decoration: none; transition: transform .12s; }
+      #ep-ratings .epr-tile:hover { transform: translateY(-2px); }
+      #ep-ratings .epr-num { font-size: 1.1rem; color: rgb(var(--color-text-light)); }
+      #ep-ratings .epr-score { font-size: 1.5rem; font-weight: 700; }
+      #ep-ratings .epr-votes { font-size: 1rem; color: rgb(var(--color-text-light)); min-height: 1.2rem; }
+      #ep-ratings .epr-tip { position: fixed; z-index: 999; pointer-events: none; padding: 6px 10px; border-radius: 4px;
+        background: rgb(var(--color-foreground)); color: rgb(var(--color-text)); font-size: 1.2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.35); max-width: 280px; width: max-content; }
     </style>
     <h2>Episodes · ${esc(d.source)}</h2>
-    <div class="epr-list">${rows}</div>`;
+    <div class="epr-grid">${tiles}</div>
+    <div class="epr-tip" hidden></div>`;
+
+  const tip = wrap.querySelector('.epr-tip');
+  const grid = wrap.querySelector('.epr-grid');
+  grid.addEventListener('mouseover', ev => {
+    const t = ev.target.closest('.epr-tile');
+    if (!t?.dataset.name) { tip.hidden = true; return; }
+    tip.textContent = `${t.querySelector('.epr-num').textContent}. ${t.dataset.name}`;
+    tip.hidden = false;
+    const r = t.getBoundingClientRect();
+    tip.style.left = Math.min(Math.max(r.left + r.width / 2 - 60, 8), innerWidth - 288) + 'px';
+    if (r.top > 60) { tip.style.top = ''; tip.style.bottom = innerHeight - r.top + 6 + 'px'; }
+    else { tip.style.bottom = ''; tip.style.top = r.bottom + 6 + 'px'; }
+  });
+  grid.addEventListener('mouseleave', () => { tip.hidden = true; });
   host.prepend(wrap);
 }

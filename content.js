@@ -20,31 +20,43 @@ setInterval(() => {
 
 async function load(anilistId) {
   const media = await anilist(anilistId);
-  if (!media || media.format === 'MOVIE') return null;
+  if (!media) return null;
   const ids = await armIds(anilistId);
   if (!ids?.imdb) return null;
-  const d = await loadImdb(ids.imdb, media).catch(e => (console.warn('[ep-ratings] imdb', e), null));
+  const d = await (media.format === 'MOVIE' ? loadMovie(ids.imdb) : loadImdb(ids.imdb, media))
+    .catch(e => (console.warn('[ep-ratings] imdb', e), null));
   if (!d?.eps?.length) return null;
   return { anilistId, ...d };
 }
 
-// --- IMDb (запрос через background: CORS) ---
+// --- IMDb (запросы через background: CORS) ---
 const imdbSeason = (imdbId, season) => chrome.runtime.sendMessage({ type: 'imdbSeason', imdbId, season });
+const imdbTitle = imdbId => chrome.runtime.sendMessage({ type: 'imdbTitle', imdbId });
+
+// Фильм: одна плитка с общим рейтингом тайтла
+async function loadMovie(imdbId) {
+  const t = await imdbTitle(imdbId);
+  if (!t) return null;
+  return { source: 'IMDb', eps: [{ n: '', name: t.name, score: t.rating, votes: t.votes, url: `https://www.imdb.com/title/${imdbId}/` }] };
+}
 
 async function loadImdb(imdbId, media) {
   const first = await imdbSeason(imdbId, '1');
   if (!first?.episodes?.length) return null;
   const seasons = first.seasons?.length ? first.seasons : ['1'];
   const start = startTs(media);
-  let pick = null;
+  // сезон записи — тот, чей первый эпизод после среза ближе всего к дате старта записи AniList
+  // (критерий «сезон доживает до старта» ломали поздние OVA в хвосте предыдущего сезона)
+  let pick = null, pickD = Infinity;
   for (const s of seasons) {
     const d = s === seasons[0] ? first : await imdbSeason(imdbId, s);
     if (!d?.episodes?.length) continue;
-    pick ??= d;
-    // первый сезон, доживающий до старта записи AniList, и есть её сезон
-    if (start == null || d.episodes.some(e => e.ts != null && e.ts >= start)) { pick = d; break; }
+    const eps = sliceToEntry(d.episodes, media);
+    const delta = start == null ? 0 : Math.abs((eps[0].ts ?? Infinity) - start);
+    if (!pick || delta < pickD) { pick = { season: d.season, eps }; pickD = delta; }
+    if (pickD <= 30 * 864e5) break; // сезон стартует рядом с записью — он и есть
   }
-  const eps = sliceToEntry(pick.episodes, media).map(e => ({
+  const eps = pick.eps.map(e => ({
     n: e.episode, name: e.name, score: e.rating, votes: e.votes,
     url: `https://www.imdb.com/title/${e.id}/`
   }));
@@ -132,7 +144,8 @@ function render(d) {
   grid.addEventListener('mouseover', ev => {
     const t = ev.target.closest('.epr-tile');
     if (!t?.dataset.name) { tip.hidden = true; return; }
-    tip.textContent = `${t.querySelector('.epr-num').textContent}. ${t.dataset.name}`;
+    const num = t.querySelector('.epr-num').textContent;
+    tip.textContent = num ? `${num}. ${t.dataset.name}` : t.dataset.name;
     tip.hidden = false;
     const r = t.getBoundingClientRect();
     tip.style.left = Math.min(Math.max(r.left + r.width / 2 - 60, 8), innerWidth - 288) + 'px';

@@ -1,8 +1,9 @@
 // Оценки серий через GraphQL-бэкенд IMDb (caching.graphql.imdb.com) — им кормится их же
 // фронтенд, работает без кук и AWS WAF-челленджей, в отличие от HTML-страниц www.imdb.com.
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type !== 'imdbSeason') return;
-  loadSeason(msg.imdbId, msg.season).then(sendResponse).catch(() => sendResponse(null));
+  const fn = { imdbSeason: () => loadSeason(msg.imdbId, msg.season), imdbTitle: () => loadTitle(msg.imdbId) }[msg.type];
+  if (!fn) return;
+  fn().then(sendResponse).catch(() => sendResponse(null));
   return true; // ответ асинхронный
 });
 
@@ -22,21 +23,32 @@ const QUERY = `query($id: ID!, $season: String!, $after: ID) {
   } }
 }`;
 
-async function gql(variables) {
+const TITLE_QUERY = `query($id: ID!) {
+  title(id: $id) { titleText { text } ratingsSummary { aggregateRating voteCount } }
+}`;
+
+async function gql(query, variables) {
   const r = await fetch('https://caching.graphql.imdb.com/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: QUERY, variables })
+    body: JSON.stringify({ query, variables })
   });
   if (!r.ok) throw new Error(`IMDb GraphQL ${r.status}`);
   return (await r.json()).data;
+}
+
+// Общий рейтинг тайтла — для фильмов (arm маппит их на собственный tt)
+async function loadTitle(imdbId) {
+  const t = (await gql(TITLE_QUERY, { id: imdbId }))?.title;
+  if (!t?.ratingsSummary?.aggregateRating) return null;
+  return { name: t.titleText?.text || '', rating: t.ratingsSummary.aggregateRating, votes: t.ratingsSummary.voteCount || 0 };
 }
 
 async function loadSeason(imdbId, season) {
   let after = null, seasons = [];
   const episodes = [];
   do {
-    const ep = (await gql({ id: imdbId, season, after }))?.title?.episodes;
+    const ep = (await gql(QUERY, { id: imdbId, season, after }))?.title?.episodes;
     if (!ep) return null;
     seasons = ep.displayableSeasons.edges.map(e => e.node.season);
     for (const { node: n } of ep.episodes.edges) {

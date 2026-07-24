@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AniList Episode Ratings",
-  "version": "1.6",
+  "version": "1.7",
   "description": "Названия и оценки серий с IMDb на страницах аниме AniList",
   "background": { "service_worker": "bg.js" },
   "host_permissions": ["https://caching.graphql.imdb.com/*"],

@@ -1,7 +1,9 @@
 // Тянет страницу эпизодов IMDb (content script не может из-за CORS) и парсит __NEXT_DATA__
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== 'imdbSeason') return;
+  // credentials: include — тащим куку aws-waf-token из браузера, иначе IMDb WAF режет запрос 202-челленджем
   fetch(`https://www.imdb.com/title/${msg.imdbId}/episodes/?season=${msg.season}`, {
+    credentials: 'include',
     headers: { 'Accept-Language': 'en-US,en' }
   })
     .then(r => r.text())

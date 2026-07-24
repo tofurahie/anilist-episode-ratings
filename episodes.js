@@ -4,7 +4,7 @@ const failed = new Set(); // anilistId, для которых данных не�
 let busy = false;
 
 // ponytail: поллинг вместо перехвата SPA-роутера — скучно и работает
-setInterval(() => {
+const startEpisodes = () => setInterval(() => {
   const m = location.pathname.match(/^\/anime\/(\d+)/);
   const id = m && m[1];
   const panel = document.getElementById('ep-ratings');
@@ -17,6 +17,8 @@ setInterval(() => {
     .catch(e => { console.warn('[ep-ratings]', e); failed.add(id); })
     .finally(() => { busy = false; });
 }, 800);
+
+globalThis.chrome?.storage?.sync.get({ episodes: true }).then(s => s.episodes && startEpisodes());
 
 async function load(anilistId) {
   const media = await anilist(anilistId);

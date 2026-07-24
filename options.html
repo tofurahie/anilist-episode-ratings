@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>AniList Ratings</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; width: 270px; color: #0b1622; }
+  label { display: flex; gap: 8px; margin-bottom: 14px; cursor: pointer; }
+  small { display: block; color: #6b7a8d; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0b1622; color: #e8eef5 }
+    small { color: #8b9bb0 }
+  }
+</style>
+<label><input type="checkbox" id="episodes"><span>Episode ratings<small>IMDb per-episode grid on anime pages</small></span></label>
+<label><input type="checkbox" id="badges"><span>Score badges<small>averageScore in the corner of posters</small></span></label>
+<small>Reload the AniList tab to apply.</small>
+<script src="options.js"></script>

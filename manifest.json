@@ -1,14 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "AniList Episode Ratings",
-  "version": "1.7",
-  "description": "Названия и оценки серий с IMDb на страницах аниме AniList",
-  "background": { "service_worker": "bg.js" },
+  "name": "AniList Ratings",
+  "version": "2.0",
+  "description": "IMDb per-episode ratings on AniList anime pages, plus average score badges on posters.",
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "permissions": ["storage"],
   "host_permissions": ["https://caching.graphql.imdb.com/*"],
+  "background": { "service_worker": "bg.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": false },
   "content_scripts": [
     {
       "matches": ["https://anilist.co/*"],
-      "js": ["content.js"],
+      "js": ["episodes.js", "badges.js"],
       "run_at": "document_idle"
     }
   ]

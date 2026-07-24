@@ -1,15 +1,27 @@
-// Smoke-тест всей цепочки (content.js + bg.js) на живых API: node test.mjs
+// Smoke-тест всей цепочки (episodes.js + bg.js) на живых API: node test.mjs
 import { readFileSync } from 'fs';
 import assert from 'assert';
 
-globalThis.setInterval = () => 0; // глушим UI-цикл
+let intervals = 0, observed = 0;
+globalThis.setInterval = () => ++intervals; // глушим UI-цикл и считаем запуски
+globalThis.MutationObserver = class { observe() { ++observed; } };
 let onMsg;
-globalThis.chrome = { runtime: {
-  onMessage: { addListener: f => { onMsg = f; } },
-  sendMessage: msg => new Promise(res => onMsg(msg, null, res))
-} };
+globalThis.chrome = {
+  runtime: {
+    onMessage: { addListener: f => { onMsg = f; } },
+    sendMessage: msg => new Promise(res => onMsg(msg, null, res))
+  },
+  // оба модуля выключены — гейт настроек не должен ничего запускать
+  storage: { sync: { get: async d => ({ ...d, episodes: false, badges: false }) } }
+};
 (0, eval)(readFileSync(new URL('./bg.js', import.meta.url), 'utf8'));
-(0, eval)(readFileSync(new URL('./content.js', import.meta.url), 'utf8'));
+(0, eval)(readFileSync(new URL('./episodes.js', import.meta.url), 'utf8'));
+(0, eval)(readFileSync(new URL('./badges.js', import.meta.url), 'utf8'));
+
+await new Promise(r => globalThis.queueMicrotask(r));
+await new Promise(r => setTimeout(r, 0));
+assert.equal(intervals, 0, 'гейт: episodes:false не запускает поллинг');
+assert.equal(observed, 0, 'гейт: badges:false не вешает MutationObserver');
 
 const frieren = await load('154587');
 assert.equal(frieren.source, 'IMDb S1', 'Frieren: сезон 1');
